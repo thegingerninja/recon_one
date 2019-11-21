@@ -1,0 +1,157 @@
+#!/bin/bash
+
+# By Paul Hornsey 2019-04-20
+
+GREEN="\e[92m";
+BLUE="\e[34m";
+RED="\e[31m";
+CYAN="\e[96m";
+STOP_COLOR="\e[0m"
+
+ACTION="${BLUE}[+] ${STOP_COLOR}"
+INFO="${BLUE}[!] ${STOP_COLOR}"
+QUESTION="${BLUE}[?] ${STOP_COLOR}"
+
+banner() {
+  echo -e "${GREEN}";
+  echo -e " (                         )              ";
+  echo -e " )\ )                   ( /(              ";
+  echo -e "(()/(  (                )\())         (   ";
+  echo -e " /(_))))\ (  (   (     ((_)\   (     ))\  ";
+  echo -e "(_)) /((_))\ )\  )\ )    ((_)  )\ ) /((_) ";
+  echo -e "| _ (_)) ((_|(_)_(_/(   / _ \ _(_/((_))   ";
+  echo -e "|   / -_) _/ _ \ ' \)) | (_) | ' \)) -_)  ";
+  echo -e "|_|_\___\__\___/_||_|   \___/|_||_|\___|  ";
+  echo -e "${STOP_COLOR}";
+}
+
+showUsage() {
+  echo -e "${GREEN}Usage: $0 remote_host";
+  echo -e "${STOP_COLOR}";
+}
+
+stopIfResetNeeded() {
+  echo -e "${QUESTION}${RED}Has the server been reset? Y/[n]"
+  read -n 1 yesOrNo
+  echo -e "${STOP_COLOR}"
+  if [ "$yesOrNo" == "${yesOrNo#[Yy]}" ] ;then
+    exit;
+  fi
+}
+
+wantToIncludeUdp() {
+  echo -e "${QUESTION}${RED}Do you want to include UDP scans? Y/[n]?" >&2
+  read -n 1 yesOrNo
+  echo -e "${STOP_COLOR}"
+  if [ "$yesOrNo" != "${yesOrNo#[Yy]}" ] ;then
+    echo "yes"
+  else
+    echo "no"
+  fi
+}
+
+finished() {
+  echo -e ""
+  echo -e "${INFO}--- Recon One - Finished ---"
+}
+
+getPingTtl() {
+  pingResult=`ping -c 1 -W 3 $1 | grep ttl | cut -d' ' -f6 | cut -d'=' -f2`
+  echo $pingResult
+}
+
+doQuickNmapScan() {
+  echo -e "${ACTION}Quick Nmap (top 100 ports)"
+  echo -e "${CYAN}";
+  $NMAP $RHOST --top-ports 100 --open
+  echo -e "${STOP_COLOR}";
+}
+
+doBasicTCPNmapScan() {
+  echo -e "${ACTION}Default Nmap settings all ports"
+  echo -e "${CYAN}";
+  $NMAP -p- -oN $OUTPUT_DIR/nmap_default.nmap $RHOST
+  echo -e "${STOP_COLOR}";
+}
+
+doIppsecNmap() {
+  echo -e "${ACTION}Run Ippsec's Nmap starter"
+  echo -e "${CYAN}";
+  $NMAP -sC -sV -p$RPORTS -oN $OUTPUT_DIR/nmap_safe_versions.namp $RHOST
+  echo -e "${STOP_COLOR}";
+}
+
+doDefaultUDPNmapScan() {
+  echo -e "${ACTION}Scan UDP default ports with Nmap"
+  echo -e "${CYAN}";
+  $NMAP -sU -oN $OUTPUT_DIR/nmap_udp_default.namp $RHOST
+  echo -e "${STOP_COLOR}";
+}
+
+getTCPPorts() {
+  if [ -s $OUTPUT_DIR/nmap_default.nmap ]; then
+    portsList=`cat $OUTPUT_DIR/nmap_default.nmap | grep tcp | cut -d"/" -f1 | sort -n | tr '\n' ',' | sed 's/,$//'`
+    echo $portsList > $OUTPUT_DIR/tcp_ports.txt
+    echo $portsList
+  else
+    echo "NONE"
+  fi
+}
+
+getUDPPorts() {
+  if [ -s $OUTPUT_DIR/nmap_udp_default.nmap ]; then
+    portList=`cat $OUTPUT_DIR/nmap_udp_default.nmap | grep udp | cut -d"/" -f1 | sort -n | tr '\n' ',' | sed 's/,$//'`
+    echo $portsList > $OUTPUT_DIR/udp_ports.txt
+    echo $portsList
+  else
+    echo "NONE"
+  fi
+}
+
+# --- Script starts here ---
+
+banner
+
+# Check parameter numbers
+if [ $# -lt 1 ]; then
+  showUsage; exit 1
+fi
+
+if [[ $1 == "-h" ||$1 == "--help" ]]; then
+  showUsage; exit 0
+fi
+
+stopIfResetNeeded
+includeUDP=`wantToIncludeUdp`
+echo
+
+RHOST=$1
+OUTPUT_DIR=recon_output_"$(echo $RHOST | tr '.' '_')"
+# -p make dir only if it doesn't exist
+mkdir -p $OUTPUT_DIR
+
+pingTtl=`getPingTtl $RHOST`
+echo -e "${INFO}Ping ttl was: $pingTtl"
+if [[ -z $pingTtl ]]; then
+  NMAP="nmap -Pn "
+else
+  NMAP="nmap "
+fi
+
+doQuickNmapScan
+doBasicTCPNmapScan
+
+RPORTS=`getTCPPorts`
+echo -e "${INFO}Open TCP Ports: ${GREEN}$RPORTS${STOP_COLOR}"
+
+if [ "$RPORTS" != "NONE" ]; then
+  doIppsecNmap
+fi
+
+if [ "$includeUDP" != "yes" ] ;then
+  doDefaultUDPNmapScan
+  UDP_PORTS=`getUDPPorts`
+  echo -e "${INFO}Open UDP Ports: ${GREEN}$UDP_PORTS${STOP_COLOR}"
+fi
+
+finished
