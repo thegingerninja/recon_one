@@ -77,14 +77,14 @@ doBasicTCPNmapScan() {
 doIppsecNmap() {
   echo -e "${ACTION}Run Ippsec's Nmap starter"
   echo -e "${CYAN}";
-  $NMAP -sC -sV -p$RPORTS -oN $OUTPUT_DIR/nmap_safe_versions.namp $RHOST
+  $NMAP -sC -sV -p$RPORTS -oN $OUTPUT_DIR/nmap_safe_versions.nmap $RHOST
   echo -e "${STOP_COLOR}";
 }
 
 doDefaultUDPNmapScan() {
   echo -e "${ACTION}Scan UDP default ports with Nmap"
   echo -e "${CYAN}";
-  $NMAP -sU -oN $OUTPUT_DIR/nmap_udp_default.namp $RHOST
+  $NMAP -sU -oN $OUTPUT_DIR/nmap_udp_default.nmap $RHOST
   echo -e "${STOP_COLOR}";
 }
 
